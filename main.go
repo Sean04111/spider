@@ -34,12 +34,12 @@ var (
 		// "生平": func(data *Data, content []string) {
 		// 	data.Deeds = append(data.Deeds, content...)
 		// },
-		"领导": func(data *Data, content []string) {
-			data.Participate_in = append(data.Participate_in, content...)
-		},
-		"主要指挥官": func(data *Data, content []string) {
-			data.Participate_in = append(data.Participate_in, content...)
-		},
+		// "领导": func(data *Data, content []string) {
+		// 	data.Participate_in = append(data.Participate_in, content...)
+		// },
+		// "主要指挥官": func(data *Data, content []string) {
+		// 	data.Participate_in = append(data.Participate_in, content...)
+		// },
 		"出生日期": func(data *Data, content []string) {
 			data.Born_in = append(data.Born_in, content...)
 		},
@@ -64,12 +64,12 @@ var (
 		// "地点": func(d *Data, s []string) {
 		// 	d.Place_happen = append(d.Place_happen, s...)
 		// },
-		"主要人物": func(d *Data, s []string) {
-			d.Participate_in = append(d.Participate_in, s...)
-		},
-		"领导人": func(d *Data, s []string) {
-			d.Participate_in = append(d.Participate_in, s...)
-		},
+		// "主要人物": func(d *Data, s []string) {
+		// 	d.Participate_in = append(d.Participate_in, s...)
+		// },
+		// "领导人": func(d *Data, s []string) {
+		// 	d.Participate_in = append(d.Participate_in, s...)
+		// },
 		"出生地": func(d *Data, s []string) {
 			d.Origin_in = append(d.Origin_in, s...)
 		},
@@ -89,10 +89,10 @@ type Data struct {
 	// Pseudonym   []string `json:pseudonym`
 	Achivements []string `json:"achivements"`
 	// Lead_to        []string `json:lead_to`
-	Participate_in []string `json:"participate_in"`
-	Born_in        []string `json:"born_in"`
-	Died_time      []string `json:"died_time"`
-	Origin_in      []string `json:"origin_in"`
+	// Participate_in []string `json:"participate_in"`  暂时没有想到办法解决
+	Born_in   []string `json:"born_in"`
+	Died_time []string `json:"died_time"`
+	Origin_in []string `json:"origin_in"`
 	// Time_happen    []string `json:time_happen`
 	// Place_happen   []string `json:place_happen`
 	Belongs_to     []string `json:"belongs_to"`
@@ -107,9 +107,9 @@ func (d *Data) Format() {
 	if len(d.Alias) != 0 {
 		d.Alias = append([]string{d.Name, "别名"}, d.Alias...)
 	}
-	if len(d.Participate_in) != 0 {
-		d.Participate_in = append([]string{d.Name, "参与"}, d.Participate_in...)
-	}
+	// if len(d.Participate_in) != 0 {
+	// 	d.Participate_in = append([]string{d.Name, "参与"}, d.Participate_in...)
+	// }
 	if len(d.Born_in) != 0 {
 		d.Born_in = append([]string{d.Name, "出生于"}, d.Born_in...)
 	}
@@ -197,7 +197,7 @@ func (s *Service) LoadCeles() {
 	reader := bufio.NewReader(f)
 	for {
 		lineRaw, err := reader.ReadString('\n')
-		line := strings.Trim(strings.Trim(lineRaw, "\n")," ")
+		line := strings.Trim(strings.Trim(lineRaw, "\n"), " ")
 		if err == io.EOF {
 			if _, ok := tripm[line]; !ok {
 				s.keywords = append(s.keywords, line)
@@ -244,7 +244,15 @@ func (s *Spider) Parse(resp *http.Response) *Data {
 					panic(err)
 				}
 				if strings.Contains(html, "<br/>") {
-					f(retData, strings.Split(html, "<br/>"))
+					strs:=strings.Split(html, "<br/>")
+					appendin:=[]string{}
+					for _,v:=range strs{
+						if strings.Contains(v,"class"){
+							continue
+						}
+						appendin = append(appendin,v)
+					}
+					f(retData,appendin)
 					done = true
 				}
 				if !done {
