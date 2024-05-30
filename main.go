@@ -1,13 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
-	"time"
+	"sync"
 
 	"github.com/PuerkitoBio/goquery"
 )
@@ -15,6 +17,7 @@ import (
 const (
 	BaseSelector = "#base-info > div > div.sc-1buquy1-1.devTPk > p"
 	BaseUrl      = "https://baike.sogou.com/m/fullLemma?key="
+	EventUrl     = ""
 )
 
 var (
@@ -25,12 +28,12 @@ var (
 		"主要成就": func(data *Data, content []string) {
 			data.Achivements = append(data.Achivements, content...)
 		},
-		"字": func(data *Data, content []string) {
-			data.Pseudonym = append(data.Pseudonym, content...)
-		},
-		"生平": func(data *Data, content []string) {
-			data.Deeds = append(data.Deeds, content...)
-		},
+		// "字": func(data *Data, content []string) {
+		// 	data.Pseudonym = append(data.Pseudonym, content...)
+		// },
+		// "生平": func(data *Data, content []string) {
+		// 	data.Deeds = append(data.Deeds, content...)
+		// },
 		"领导": func(data *Data, content []string) {
 			data.Participate_in = append(data.Participate_in, content...)
 		},
@@ -71,33 +74,39 @@ var (
 			d.Origin_in = append(d.Origin_in, s...)
 		},
 		"代表作品": func(d *Data, s []string) {
-			d.Authority = append(d.Authority, s...)
+			d.Opus = append(d.Opus, s...)
+		},
+		"毕业院校": func(d *Data, s []string) {
+			d.Graduated_from = append(d.Graduated_from, s...)
 		},
 	}
 )
 
 type Data struct {
-	Id          Id       `json:_id`
-	Name        string   `json:name`
-	Deeds       []string `json:deeds`
-	Alias       []string `json:alias`
-	Pseudonym   []string `json:pseudonym`
-	Achivements []string `json:achivements`
+	Name string `json:"name"`
+	// Deeds       []string `json:deeds`
+	Alias []string `json:"alias"`
+	// Pseudonym   []string `json:pseudonym`
+	Achivements []string `json:"achivements"`
 	// Lead_to        []string `json:lead_to`
-	Participate_in []string `json:participate_in`
-	Born_in        []string `json:born_in`
-	Died_time      []string `json:died_time`
-	Origin_in      []string `json:origin_in`
+	Participate_in []string `json:"participate_in"`
+	Born_in        []string `json:"born_in"`
+	Died_time      []string `json:"died_time"`
+	Origin_in      []string `json:"origin_in"`
 	// Time_happen    []string `json:time_happen`
 	// Place_happen   []string `json:place_happen`
-	Belongs_to []string `json:belongs_to`
-	Authority  []string `json:authority`
+	Belongs_to     []string `json:"belongs_to"`
+	Opus           []string `json:"opus"`
+	Graduated_from []string `json:"graduated_from"`
 }
 
 func (d *Data) Format() {
 	// if len(d.Lead_to) != 0 {
 	// 	d.Lead_to = append(d.Lead_to, []string{"领导", d.Name}...)
 	// }
+	if len(d.Alias) != 0 {
+		d.Alias = append([]string{d.Name, "别名"}, d.Alias...)
+	}
 	if len(d.Participate_in) != 0 {
 		d.Participate_in = append([]string{d.Name, "参与"}, d.Participate_in...)
 	}
@@ -119,22 +128,25 @@ func (d *Data) Format() {
 	if len(d.Belongs_to) != 0 {
 		d.Belongs_to = append([]string{d.Name, "从属"}, d.Belongs_to...)
 	}
-	if len(d.Authority) != 0 {
-		d.Authority = append([]string{d.Name, "主要作品有"}, d.Authority...)
+	if len(d.Opus) != 0 {
+		d.Opus = append([]string{d.Name, "主要作品"}, d.Opus...)
 	}
-}
-
-type Id struct {
-	Oid string `json:oid`
+	if len(d.Achivements) != 0 {
+		d.Achivements = append([]string{d.Name, "主要成就"}, d.Achivements...)
+	}
+	if len(d.Graduated_from) != 0 {
+		d.Graduated_from = append([]string{d.Name, "毕业于"}, d.Graduated_from...)
+	}
 }
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 type Service struct {
-	sp      *Spider
-	writer  *Writer
-	dataCh  chan *Data
-	baseUrl string
+	sp       *Spider
+	writer   *Writer
+	dataCh   chan *Data
+	baseUrl  string
+	keywords []string
 }
 
 func NewService(baseUrl string, filepath string) *Service {
@@ -143,21 +155,14 @@ func NewService(baseUrl string, filepath string) *Service {
 	svr.baseUrl = baseUrl
 	svr.writer = NewWriter(filepath)
 	svr.dataCh = make(chan *Data, 100)
+	svr.LoadCeles()
 	return svr
 }
 
 func (s *Service) WorkOnKeys(keywords []string) {
-
-	go func() {
-		for {
-			select {
-			case data := <-s.dataCh:
-				s.writer.Write(data)
-			default:
-			}
-		}
-	}()
+	wg := sync.WaitGroup{}
 	for _, key := range keywords {
+		wg.Add(1)
 		url := s.baseUrl + url.QueryEscape(key)
 		go func() {
 			fmt.Println("正在收集:", key, "...")
@@ -170,8 +175,51 @@ func (s *Service) WorkOnKeys(keywords []string) {
 			s.dataCh <- data
 		}()
 	}
+	go func() {
+		for {
+			select {
+			case data := <-s.dataCh:
+				s.writer.Write(data)
+				wg.Done()
+			default:
+			}
+		}
+	}()
+	wg.Wait()
+}
 
-	time.Sleep(5 * time.Second)
+func (s *Service) LoadCeles() {
+	f, err := os.Open("./cele.txt")
+	if err != nil {
+		panic(err)
+	}
+	tripm := map[string]bool{}
+	reader := bufio.NewReader(f)
+	for {
+		lineRaw, err := reader.ReadString('\n')
+		line := strings.Trim(strings.Trim(lineRaw, "\n")," ")
+		if err == io.EOF {
+			if _, ok := tripm[line]; !ok {
+				s.keywords = append(s.keywords, line)
+				tripm[line] = true
+			}
+			break
+		}
+		if err != nil {
+			panic(err)
+		}
+		if _, ok := tripm[line]; !ok {
+			s.keywords = append(s.keywords, line)
+			tripm[line] = true
+		}
+	}
+}
+
+func (s *Service) Work() {
+	if len(s.keywords) == 0 {
+		s.LoadCeles()
+	}
+	s.WorkOnKeys(s.keywords)
 }
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -257,9 +305,8 @@ func (w *Writer) Write(data *Data) {
 }
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-// 先按照事件搜索；
-// 然后根据事件搜索人物补全
+
 func main() {
 	s := NewService(BaseUrl, "./history.json")
-	s.WorkOnKeys([]string{"孙中山", "毛泽东", "周恩来"})
+	s.Work()
 }
