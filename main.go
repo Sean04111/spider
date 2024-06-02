@@ -10,133 +10,136 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
 const (
-	BaseSelector = "#base-info > div > div.sc-1buquy1-1.devTPk > p"
-	BaseUrl      = "https://baike.sogou.com/m/fullLemma?key="
-	EventUrl     = ""
+	BaseSelector   = "#base-info > div > div.sc-1buquy1-1.devTPk > p"
+	BaseUrl        = "https://baike.sogou.com/m/fullLemma?key="
+	EventUrl       = ""
+	EmptyStr       = ""
+	ColumnSeletor  = "#bkcard-level1"
+	TitleSelector  = "div.sc-gtx4fj-0.fhWDTV.top-title.primary-title > div.special-title-wrap > h3"
+	ContentSeletor = "div.bkcard-lv1-content > p"
 )
 
 var (
-	NeedMap = map[string]func(*Data, []string){
-		"别名": func(data *Data, content []string) {
-			data.Alias = append(data.Alias, content...)
+	NeedMap = map[string]func(*Data, string){
+		// "别名": func(data *Data, content string) {
+		// 	data.Alias = content
+		// },
+		// "主要成就": func(data *Data, content string) {
+		// 	data.Achivements = content
+		// },
+
+		// "出生日期": func(data *Data, content string) {
+		// 	data.Born_in = content
+		// },
+		// "逝世日期": func(data *Data, content string) {
+		// 	data.Died_time = content
+		// },
+		// // "政党": func(data *Data, content string) {
+		// // 	data.Belongs_to = data.Belongs_to + "," + content
+		// // },
+		// // "国籍": func(data *Data, content []string) {
+		// // 	data.Belongs_to = append(data.Belongs_to, content...)
+		// // },
+		// // "开始日期": func(d *Data, s []string) {
+		// // 	d.Time_happen = append(d.Time_happen, s...)
+		// // },
+		// // "时间": func(d *Data, s []string) {
+		// // 	d.Time_happen = append(d.Time_happen, s...)
+		// // },
+		// // "爆发时间": func(d *Data, s []string) {
+		// // 	d.Time_happen = append(d.Time_happen, s...)
+		// // },
+		// // "地点": func(d *Data, s []string) {
+		// // 	d.Place_happen = append(d.Place_happen, s...)
+		// // },
+		// // "主要人物": func(d *Data, s []string) {
+		// // 	d.Participate_in = append(d.Participate_in, s...)
+		// // },
+		// // "领导人": func(d *Data, s []string) {
+		// // 	d.Participate_in = append(d.Participate_in, s...)
+		// // },
+		// "出生地": func(d *Data, s string) {
+		// 	d.Origin_in = s
+		// },
+		// "代表作品": func(d *Data, s string) {
+		// 	d.Opus = s
+		// },
+		// "朝代": func(d *Data, s string) {
+		// 	if d.Dynasty_of==EmptyStr{
+		// 		d.Dynasty_of = s
+		// 	}
+		// },
+		// "所处时代": func(d *Data, s string) {
+		// 	if d.Dynasty_of==EmptyStr{
+		// 		d.Dynasty_of = s
+		// 	}
+		// },
+		// "民族": func(d *Data, s string) {
+		// 	d.Ethnic_of = s
+		// },
+		// "庙号": func(d *Data, s string) {
+		// 	d.Templename = s
+		// },
+		// // "陵墓位置":func(d *Data, s string) {
+		// // 	d.Died_in = s
+		// // },
+		// "字": func(d *Data, s string) {
+		// 	d.Courtesy_name = s
+		// },
+		"作者": func(d *Data, s string) {
+			d.Author_is = s
 		},
-		"主要成就": func(data *Data, content []string) {
-			data.Achivements = append(data.Achivements, content...)
+		"创作年代": func(d *Data, s string) {
+			d.Dynasty_is = s
 		},
-		// "字": func(data *Data, content []string) {
-		// 	data.Pseudonym = append(data.Pseudonym, content...)
-		// },
-		// "生平": func(data *Data, content []string) {
-		// 	data.Deeds = append(data.Deeds, content...)
-		// },
-		// "领导": func(data *Data, content []string) {
-		// 	data.Participate_in = append(data.Participate_in, content...)
-		// },
-		// "主要指挥官": func(data *Data, content []string) {
-		// 	data.Participate_in = append(data.Participate_in, content...)
-		// },
-		"出生日期": func(data *Data, content []string) {
-			data.Born_in = append(data.Born_in, content...)
+		"作品出处": func(d *Data, s string) {
+			d.From_is = s
 		},
-		"逝世日期": func(data *Data, content []string) {
-			data.Died_time = append(data.Died_time, content...)
+		"文学体裁": func(d *Data, s string) {
+			d.Typs_is = s
 		},
-		"政党": func(data *Data, content []string) {
-			data.Belongs_to = append(data.Belongs_to, content...)
+		"别名": func(d *Data, s string) {
+			d.Alias_is = s
 		},
-		"国籍": func(data *Data, content []string) {
-			data.Belongs_to = append(data.Belongs_to, content...)
+		"作品原文": func(d *Data, s string) {
+			d.Content = s
 		},
-		// "开始日期": func(d *Data, s []string) {
-		// 	d.Time_happen = append(d.Time_happen, s...)
-		// },
-		// "时间": func(d *Data, s []string) {
-		// 	d.Time_happen = append(d.Time_happen, s...)
-		// },
-		// "爆发时间": func(d *Data, s []string) {
-		// 	d.Time_happen = append(d.Time_happen, s...)
-		// },
-		// "地点": func(d *Data, s []string) {
-		// 	d.Place_happen = append(d.Place_happen, s...)
-		// },
-		// "主要人物": func(d *Data, s []string) {
-		// 	d.Participate_in = append(d.Participate_in, s...)
-		// },
-		// "领导人": func(d *Data, s []string) {
-		// 	d.Participate_in = append(d.Participate_in, s...)
-		// },
-		"出生地": func(d *Data, s []string) {
-			d.Origin_in = append(d.Origin_in, s...)
-		},
-		"代表作品": func(d *Data, s []string) {
-			d.Opus = append(d.Opus, s...)
-		},
-		"毕业院校": func(d *Data, s []string) {
-			d.Graduated_from = append(d.Graduated_from, s...)
+		"作品译文": func(d *Data, s string) {
+			d.Translation = s
 		},
 	}
 )
 
 type Data struct {
-	Name string `json:"name"`
-	// Deeds       []string `json:deeds`
-	Alias []string `json:"alias"`
-	// Pseudonym   []string `json:pseudonym`
-	Achivements []string `json:"achivements"`
-	// Lead_to        []string `json:lead_to`
-	// Participate_in []string `json:"participate_in"`  暂时没有想到办法解决
-	Born_in   []string `json:"born_in"`
-	Died_time []string `json:"died_time"`
-	Origin_in []string `json:"origin_in"`
-	// Time_happen    []string `json:time_happen`
-	// Place_happen   []string `json:place_happen`
-	Belongs_to     []string `json:"belongs_to"`
-	Opus           []string `json:"opus"`
-	Graduated_from []string `json:"graduated_from"`
-}
+	// Name        string `json:"name"`
+	// Achivements string `json:"achivements"`
+	// Alias       string `json:"alias"`
+	// Templename  string `json:"templename"`
+	// Opus        string `json:"opus"`
+	// Dynasty_of  string `json:"dynaty_of"`
+	// Born_in     string `json:"born_in"`
+	// Died_time   string `json:"died_time"`
+	// Died_in     string `json:"died_in"`
+	// Origin_in     string `json:"origin_in"`
+	// Ethnic_of     string `json:"ethnic_of"`
+	// Courtesy_name string `json:"courtesy_name"`
 
-func (d *Data) Format() {
-	// if len(d.Lead_to) != 0 {
-	// 	d.Lead_to = append(d.Lead_to, []string{"领导", d.Name}...)
-	// }
-	if len(d.Alias) != 0 {
-		d.Alias = append([]string{d.Name, "别名"}, d.Alias...)
-	}
-	// if len(d.Participate_in) != 0 {
-	// 	d.Participate_in = append([]string{d.Name, "参与"}, d.Participate_in...)
-	// }
-	if len(d.Born_in) != 0 {
-		d.Born_in = append([]string{d.Name, "出生于"}, d.Born_in...)
-	}
-	if len(d.Died_time) != 0 {
-		d.Died_time = append([]string{d.Name, "卒于"}, d.Died_time...)
-	}
-	if len(d.Origin_in) != 0 {
-		d.Origin_in = append([]string{d.Name, "籍贯"}, d.Origin_in...)
-	}
-	// if len(d.Time_happen) != 0 {
-	// 	d.Time_happen = append([]string{d.Name, "发生自"}, d.Time_happen...)
-	// }
-	// if len(d.Place_happen) != 0 {
-	// 	d.Place_happen = append([]string{d.Name, "发生在"}, d.Place_happen...)
-	// }
-	if len(d.Belongs_to) != 0 {
-		d.Belongs_to = append([]string{d.Name, "从属"}, d.Belongs_to...)
-	}
-	if len(d.Opus) != 0 {
-		d.Opus = append([]string{d.Name, "主要作品"}, d.Opus...)
-	}
-	if len(d.Achivements) != 0 {
-		d.Achivements = append([]string{d.Name, "主要成就"}, d.Achivements...)
-	}
-	if len(d.Graduated_from) != 0 {
-		d.Graduated_from = append([]string{d.Name, "毕业于"}, d.Graduated_from...)
-	}
+	// ++++
+	Name        string `json:"name"`
+	Content     string `json:"content"`
+	Translation string `json:"translation"`
+
+	Author_is  string `json:"author_is"`
+	Dynasty_is string `json:"time_is"`
+	From_is    string `json:"from_is"`
+	Alias_is   string `json:"alias_is"`
+	Typs_is    string `json:"type_is"`
 }
 
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
@@ -171,7 +174,6 @@ func (s *Service) WorkOnKeys(keywords []string) {
 				panic(err)
 			}
 			data.Name = key
-			data.Format()
 			s.dataCh <- data
 		}()
 	}
@@ -181,6 +183,7 @@ func (s *Service) WorkOnKeys(keywords []string) {
 			case data := <-s.dataCh:
 				s.writer.Write(data)
 				wg.Done()
+
 			default:
 			}
 		}
@@ -225,10 +228,12 @@ func (s *Service) Work() {
 // +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 type Spider struct {
-	c *http.Client
+	c         *http.Client
+	nodeCount atomic.Int32
+	nodeMap   sync.Map
 }
 
-func (s *Spider) Parse(resp *http.Response) *Data {
+func (spider *Spider) Parse(resp *http.Response) *Data {
 	retData := &Data{}
 	doc, err := goquery.NewDocumentFromResponse(resp)
 	if err != nil {
@@ -244,25 +249,50 @@ func (s *Spider) Parse(resp *http.Response) *Data {
 					panic(err)
 				}
 				if strings.Contains(html, "<br/>") {
-					strs:=strings.Split(html, "<br/>")
-					appendin:=[]string{}
-					for _,v:=range strs{
-						if strings.Contains(v,"class"){
+					strs := strings.Split(html, "<br/>")
+					appendin := []string{}
+					for _, v := range strs {
+						if strings.Contains(v, "class") {
 							continue
 						}
-						appendin = append(appendin,v)
+						appendin = append(appendin, v)
 					}
-					f(retData,appendin)
+					for _, v := range appendin {
+						if _, ok := spider.nodeMap.Load(v); !ok {
+							spider.nodeCount.Add(1)
+							spider.nodeMap.Store(v, true)
+						}
+					}
+					pushin := strings.Join(appendin, ",")
+					f(retData, pushin)
 					done = true
 				}
 				if !done {
 					RawcolContent := s.Text()
 					content := strings.Split(RawcolContent, "、")
-					f(retData, content)
+					pushin := strings.Join(content, ",")
+					for _, v := range content {
+						if _, ok := spider.nodeMap.Load(v); !ok {
+							spider.nodeCount.Add(1)
+							spider.nodeMap.Store(v, true)
+						}
+					}
+					f(retData, pushin)
 				}
 
 			})
 
+		}
+	})
+	doc.Find(ColumnSeletor).Each(func(i int, s *goquery.Selection) {
+		fmt.Println(s.Find(TitleSelector).Text())
+		if f, ok := NeedMap[s.Find(TitleSelector).Text()]; ok {
+			fmt.Println("ok1")
+			var data string
+			s.Find(ContentSeletor).Each(func(i int, small *goquery.Selection) {
+				data += small.Text()
+			})
+			f(retData, data)
 		}
 	})
 	return retData
@@ -301,6 +331,11 @@ func NewWriter(filepath string) *Writer {
 }
 
 func (w *Writer) Write(data *Data) {
+
+	// if data.Achivements == EmptyStr && data.Alias == EmptyStr && data.Born_in == EmptyStr && data.Courtesy_name == EmptyStr && data.Died_time == EmptyStr && data.Dynasty_of == EmptyStr && data.Ethnic_of == EmptyStr && data.Opus == EmptyStr && data.Origin_in == EmptyStr && data.Templename == EmptyStr {
+	// 	return
+	// }
+
 	code, err := json.Marshal(data)
 	if err != nil {
 		panic(err)
@@ -316,5 +351,5 @@ func (w *Writer) Write(data *Data) {
 
 func main() {
 	s := NewService(BaseUrl, "./history.json")
-	s.Work()
+	s.WorkOnKeys([]string{"静夜思"})
 }
